@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moiré Time</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #f5f5f5; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+const TAU = Math.PI * 2;
+let W, H;
+
+function resize() {
+  W = cvs.width  = window.innerWidth;
+  H = cvs.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Draw parallel lines (from a global origin) clipped to a circle
+function layer(clipX, clipY, clipR, origX, origY, angle, spacing, alpha, lw) {
+  const diag = Math.hypot(W, H);
+  const n    = Math.ceil(diag / spacing) + 2;
+
+  ctx.save();
+
+  // Circular window
+  ctx.beginPath();
+  ctx.arc(clipX, clipY, clipR, 0, TAU);
+  ctx.clip();
+
+  // Pattern: infinite parallel lines from origin
+  ctx.translate(origX, origY);
+  ctx.rotate(angle);
+  ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+  for (let i = -n; i <= n; i++) {
+    ctx.moveTo(i * spacing, -diag);
+    ctx.lineTo(i * spacing,  diag);
+  }
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function frame() {
+  const now = new Date();
+  const ms  = now.getMilliseconds() / 1000;
+  const s   = now.getSeconds()  + ms;
+  const m   = now.getMinutes()  + s  / 60;
+  const h   = now.getHours() % 12 + m  / 60;
+
+  const hA = (h / 12) * TAU;
+  const mA = (m / 60) * TAU;
+  const sA = (s / 60) * TAU;
+
+  const S = Math.min(W, H);
+  const R = S * 0.33;   // circle radius — large enough for overlap
+  const D = S * 0.23;   // distance from canvas centre to each circle centre
+
+  // Three circles in equilateral triangle: hours top, minutes bottom-left, seconds bottom-right
+  const hCx = W/2 + Math.cos(-TAU/4)           * D;
+  const hCy = H/2 + Math.sin(-TAU/4)           * D;
+  const mCx = W/2 + Math.cos(-TAU/4 + TAU/3)   * D;
+  const mCy = H/2 + Math.sin(-TAU/4 + TAU/3)   * D;
+  const sCx = W/2 + Math.cos(-TAU/4 + TAU*2/3) * D;
+  const sCy = H/2 + Math.sin(-TAU/4 + TAU*2/3) * D;
+
+  // Pattern origins drift slowly — creates travelling moiré inside each circle
+  // and shifts the interference in the overlap zones
+  const hOx = W/2 + Math.sin(hA * 0.3) * 7;
+  const hOy = H/2 + Math.cos(hA * 0.3) * 7;
+  const mOx = W/2 + Math.sin(mA * 0.5) * 6;
+  const mOy = H/2 + Math.cos(mA * 0.5) * 6;
+  const sOx = W/2 + Math.sin(sA + 0.9) * 5;
+  const sOy = H/2 + Math.cos(sA + 0.9) * 5;
+
+  // Spacing breathes with time — shifts the moiré beat frequency
+  const hSpacing = 5.8 + Math.sin(hA * 0.7) * 0.8;   // ~5.0 – 6.6 px
+  const mSpacing = 4.4 + Math.sin(mA * 0.9) * 0.6;   // ~3.8 – 5.0 px
+  const sSpacing = 3.3 + Math.sin(sA)       * 0.4;   // ~2.9 – 3.7 px
+
+  ctx.fillStyle = '#f5f5f5';
+  ctx.fillRect(0, 0, W, H);
+
+  // Hours  — thickest stroke, widest spacing, slowest
+  layer(hCx, hCy, R, hOx, hOy, hA, hSpacing, 0.58, 1.9);
+
+  // Minutes — medium stroke and spacing
+  layer(mCx, mCy, R, mOx, mOy, mA, mSpacing, 0.52, 1.1);
+
+  // Seconds — finest stroke, tightest lines, fastest
+  layer(sCx, sCy, R, sOx, sOy, sA, sSpacing, 0.46, 0.55);
+
+  requestAnimationFrame(frame);
+}
+
+frame();
+</script>
+</body>
+</html>
