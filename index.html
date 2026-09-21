@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moiré Time</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #f6f6f6; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+const TAU = Math.PI * 2;
+
+let W, H;
+
+function resize() {
+  W = cvs.width  = window.innerWidth;
+  H = cvs.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Draw parallel lines radiating from an offset center
+function stripes(ox, oy, angle, spacing, alpha, lw) {
+  const diag = Math.hypot(W, H);
+  const n    = Math.ceil(diag / spacing) + 2;
+
+  ctx.save();
+  ctx.translate(W / 2 + ox, H / 2 + oy);
+  ctx.rotate(angle);
+  ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+
+  for (let i = -n; i <= n; i++) {
+    const x = i * spacing;
+    ctx.moveTo(x, -diag);
+    ctx.lineTo(x,  diag);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Soft radial fade toward edges — keeps the eye at centre
+function vignette() {
+  const cx = W / 2, cy = H / 2;
+  const r0 = Math.min(W, H) * 0.38;
+  const r1 = Math.hypot(W, H) * 0.68;
+  const g  = ctx.createRadialGradient(cx, cy, r0, cx, cy, r1);
+  g.addColorStop(0, 'rgba(246,246,246,0)');
+  g.addColorStop(1, 'rgba(246,246,246,0.88)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function frame() {
+  const now = new Date();
+  const ms  = now.getMilliseconds() / 1000;       // fractional second
+  const s   = now.getSeconds()  + ms;             // 0 – 60, continuous
+  const m   = now.getMinutes()  + s  / 60;        // 0 – 60, continuous
+  const h   = now.getHours() % 12 + m  / 60;     // 0 – 12, continuous
+
+  // Normalised angles, one full turn each cycle
+  const hA = (h / 12) * TAU;
+  const mA = (m / 60) * TAU;
+  const sA = (s / 60) * TAU;
+
+  // Line spacings gently breathe — changes the moiré beat frequency
+  const hSpacing = 12  + Math.sin(hA * 0.5) * 1.8;   // ~10.2 – 13.8 px
+  const mSpacing = 9   + Math.sin(mA * 0.7) * 1.1;   // ~7.9  – 10.1 px
+  const sSpacing = 6.8 + Math.sin(sA)       * 0.6;   // ~6.2  –  7.4 px
+
+  // Minutes & seconds centres orbit slowly around the canvas midpoint,
+  // creating a spatial phase shift that adds "movement" to the moiré
+  const mOx = Math.sin(mA)       * 16;
+  const mOy = Math.cos(mA)       * 16;
+  const sOx = Math.sin(sA + 1.1) *  9;   // +1.1 rad phase offset keeps
+  const sOy = Math.cos(sA + 1.1) *  9;   // it out of sync with minutes
+
+  // --- draw ---
+  ctx.fillStyle = '#f6f6f6';
+  ctx.fillRect(0, 0, W, H);
+
+  // Hours  — slowest, widest gaps, anchored, most dominant
+  stripes(0,    0,    hA, hSpacing, 0.50, 0.80);
+
+  // Minutes — medium cadence, drifting centre
+  stripes(mOx,  mOy,  mA, mSpacing, 0.43, 0.75);
+
+  // Seconds — fast, tight, faintest — the living pulse of the piece
+  stripes(sOx,  sOy,  sA, sSpacing, 0.30, 0.70);
+
+  // Fade edges to focus attention inward
+  vignette();
+
+  requestAnimationFrame(frame);
+}
+
+frame();
+</script>
+</body>
+</html>
